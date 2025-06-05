@@ -44,7 +44,7 @@ Start backend using:
 npm i
 npm run dev
 ```
-Start both the frontend using:
+Start the frontend using:
 
 ```bash
 cd registrationLogin
