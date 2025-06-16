@@ -1,11 +1,11 @@
 import React, { useState } from "react";
 import { Eye, EyeOff, Mail, Lock, User, ShoppingBag } from "lucide-react";
 import axios from "axios";
-import {useNavigate} from 'react-router-dom'
+import { useNavigate } from "react-router-dom";
 export default function LoginForm() {
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
-  const navigate=useNavigate();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -26,20 +26,29 @@ export default function LoginForm() {
     for (let key in formData) {
       form.append(key, formData[key]);
     }
-    console.log(form)
+    console.log(form);
     if (isLogin) {
       console.log("Login attempt:", {
         email: formData.email,
         password: formData.password,
       });
       async function login() {
-        let res = await axios.put("http://localhost:3000/api/login", form, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-        if(res.status===201){
-          navigate(`/Setup/${res.data.user._id}`);
+        try {
+          let res = await axios.post("http://localhost:3000/api/login", form, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+
+          if (res.status === 200) {
+            // Store the token in localStorage
+            localStorage.setItem("token", res.data.token);
+            navigate(`/Setup/${res.data.user._id}`);
+          }
+          console.log(res.data);
+          console.log(res.status)
+        } catch (error) {
+          console.error("Login error:", error);
+          // Handle error (e.g., show error message to user)
         }
-        console.log(res.data);
       }
       login();
     } else {
@@ -47,7 +56,7 @@ export default function LoginForm() {
         let res = await axios.post("http://localhost:3000/api/register", form, {
           headers: { "Content-Type": "multipart/form-data" },
         });
-        if(res.status===201){
+        if (res.status === 201) {
           toggleMode();
         }
         console.log(res.data);
@@ -59,7 +68,7 @@ export default function LoginForm() {
   function toggleMode() {
     setIsLogin(!isLogin);
     setFormData({ email: "", password: "", confirmPassword: "", fullName: "" });
-  };
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 flex items-center justify-center py-16 px-4">

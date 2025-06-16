@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import {useNavigate} from "react-router-dom"
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   User,
   Calendar,
@@ -15,9 +15,12 @@ import {
 } from "lucide-react";
 import axios from "axios";
 import { useParams } from "react-router-dom";
+
 export default function ProfileSetup() {
   const { id } = useParams();
   const [currentStep, setCurrentStep] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [formData, setFormData] = useState({
     // Personal Info
     gender: "",
@@ -40,7 +43,37 @@ export default function ProfileSetup() {
   });
 
   const [newBrand, setNewBrand] = useState("");
-  const navigate=useNavigate();
+  const navigate = useNavigate();
+
+  // Check authentication on component mount
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      navigate('/login'); // Redirect to login if no token
+      return;
+    }
+
+    // Optionally verify token validity
+    const checkAuth = async () => {
+      try {
+        // You can add a token verification endpoint or just check if token exists
+        const response = await axios.get('http://localhost:3000/api/products', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        console.log(response.data)
+      } catch (error) {
+        console.error('Token verification failed:', error);
+        localStorage.removeItem('token');
+        navigate('/');
+      }
+    };
+
+    // Uncomment if you want to verify token on mount
+    checkAuth();
+  }, [navigate]);
+
   const styleOptions = [
     "Casual",
     "Formal",
@@ -127,31 +160,58 @@ export default function ProfileSetup() {
     }));
   };
 
-  const handleSubmit = () => {
-    console.log("Profile setup data:", formData);
-    // Add your profile setup logic here
-    let form = new FormData();
-    for (let key in formData) {
-      form.append(key, formData[key]);
+  const handleSubmit = async () => {
+    setLoading(true);
+    setError("");
+    
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      setError("Authentication required. Please login again.");
+      navigate('/login');
+      return;
     }
-    async function submit() {
-      try {
-        let res = await axios.patch(
-          `http://localhost:3000/api/user/${id}/profile`,
-          form,
-          {
-            headers: { "Content-Type": "multipart/form-data" },
-          }
-        );
-        if(res.status===201){
-          navigate('/updated');
-        }
-        console.log(res.data);
-      } catch (err) {
-        console.log(err);
+
+    try {
+      // Convert arrays to JSON strings for FormData
+      const submitData = {
+        ...formData,
+        stylePreferences: JSON.stringify(formData.stylePreferences),
+        preferredBrands: JSON.stringify(formData.preferredBrands)
+      };
+
+      let form = new FormData();
+      for (let key in submitData) {
+        form.append(key, submitData[key]);
       }
+
+      const response = await axios.patch(
+        `http://localhost:3000/api/user/${id}/profile`,
+        form,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+            "Authorization": `Bearer ${token}`
+          },
+        }
+      );
+
+      if (response.status === 200) {
+        navigate('/updated');
+      }
+    } catch (error) {
+      console.error("Profile update error:", error);
+      
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        setError("Authentication failed. Please login again.");
+        localStorage.removeItem('token');
+        navigate('/login');
+      } else {
+        setError(error.response?.data?.error || "Failed to update profile. Please try again.");
+      }
+    } finally {
+      setLoading(false);
     }
-    submit();
   };
 
   const nextStep = () => {
@@ -524,6 +584,13 @@ export default function ProfileSetup() {
 
         {/* Form Container */}
         <div className="bg-white rounded-2xl shadow-2xl p-8 backdrop-blur-sm bg-opacity-95">
+          {/* Error Message */}
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-red-600 text-sm">{error}</p>
+            </div>
+          )}
+
           {/* Step Indicator */}
           {renderStepIndicator()}
 
@@ -538,9 +605,9 @@ export default function ProfileSetup() {
           <div className="flex justify-between mt-8">
             <button
               onClick={prevStep}
-              disabled={currentStep === 1}
+              disabled={currentStep === 1 || loading}
               className={`px-6 py-3 rounded-lg font-semibold transition-all ${
-                currentStep === 1
+                currentStep === 1 || loading
                   ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                   : "bg-gray-300 text-gray-700 hover:bg-gray-400"
               }`}
@@ -551,16 +618,18 @@ export default function ProfileSetup() {
             {currentStep < 3 ? (
               <button
                 onClick={nextStep}
-                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transform hover:scale-105 transition-all duration-200 shadow-lg"
+                disabled={loading}
+                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transform hover:scale-105 transition-all duration-200 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Next Step
               </button>
             ) : (
               <button
                 onClick={handleSubmit}
-                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transform hover:scale-105 transition-all duration-200 shadow-lg"
+                disabled={loading}
+                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transform hover:scale-105 transition-all duration-200 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Complete Setup
+                {loading ? "Updating..." : "Complete Setup"}
               </button>
             )}
           </div>
@@ -569,7 +638,8 @@ export default function ProfileSetup() {
           <div className="text-center mt-4">
             <button
               onClick={handleSubmit}
-              className="text-gray-500 hover:text-gray-700 text-sm"
+              disabled={loading}
+              className="text-gray-500 hover:text-gray-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Skip for now
             </button>
